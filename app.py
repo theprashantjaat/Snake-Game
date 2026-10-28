@@ -6,11 +6,64 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(
     page_title="Snake Game",
     page_icon="🐍",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-st.title("🐍 Snake Game")
-st.caption("Eat the apples, grow your snake, and beat your high score!")
+# Mobile-friendly design
+st.markdown("""
+<style>
+    .block-container {
+        max-width: 420px;
+        padding: 0.4rem 0.5rem 0.5rem;
+    }
+
+    h1 {
+        text-align: center;
+        font-size: 1.6rem !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    h3 {
+        text-align: center;
+        margin: 0.2rem 0 !important;
+    }
+
+    [data-testid="stMetric"] {
+        padding: 0 !important;
+        text-align: center;
+    }
+
+    div.stButton > button {
+        min-height: 42px;
+        border-radius: 12px;
+        font-size: 18px;
+        padding: 0 !important;
+    }
+
+    .board {
+        display: grid;
+        grid-template-columns: repeat(15, minmax(0, 1fr));
+        gap: 1px;
+        background: #111827;
+        border: 2px solid #111827;
+        width: min(78vw, 310px);
+        margin: 5px auto 8px;
+        box-sizing: border-box;
+    }
+
+    .cell {
+        aspect-ratio: 1;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        line-height: 1;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 SIZE = 15
 
@@ -25,7 +78,7 @@ def new_game():
 if "snake" not in st.session_state:
     new_game()
 
-# Change direction, but don't allow a reverse turn
+# Change direction without reversing into itself
 def turn(new_direction):
     dx, dy = st.session_state.direction
     nx, ny = new_direction
@@ -33,47 +86,31 @@ def turn(new_direction):
     if (nx, ny) != (-dx, -dy):
         st.session_state.direction = new_direction
 
-# Direction buttons
-st.write("### Controls")
-
-row1 = st.columns([1, 1, 1])
-with row1[1]:
-    if st.button("⬆️ Up", use_container_width=True):
-        turn((0, -1))
-
-row2 = st.columns(3)
-with row2[0]:
-    if st.button("⬅️ Left", use_container_width=True):
-        turn((-1, 0))
-with row2[1]:
-    if st.button("⬇️ Down", use_container_width=True):
-        turn((0, 1))
-with row2[2]:
-    if st.button("➡️ Right", use_container_width=True):
-        turn((1, 0))
-
-# Move the snake on each automatic refresh
+# Move the snake more slowly: 500 milliseconds per refresh
 if not st.session_state.over:
-    st_autorefresh(interval=300, key="snake_timer")
+    st_autorefresh(interval=500, key="game_timer")
 
     dx, dy = st.session_state.direction
     x, y = st.session_state.snake[0]
     head = (x + dx, y + dy)
 
     eating = head == st.session_state.food
+
+    # Allow the tail's old position when it moves away
     body = (
         st.session_state.snake
         if eating
         else st.session_state.snake[:-1]
     )
 
-    # Check wall and body collisions
+    # Detect wall and body collisions
     if (
         head[0] < 0 or head[0] >= SIZE
         or head[1] < 0 or head[1] >= SIZE
         or head in body
     ):
         st.session_state.over = True
+
     else:
         st.session_state.snake.insert(0, head)
 
@@ -94,13 +131,13 @@ if not st.session_state.over:
         else:
             st.session_state.snake.pop()
 
-# Display score
-st.metric("🏆 Score", st.session_state.score)
+# Title and score
+st.title("🐍 Snake Game")
+st.metric("🏆 SCORE", st.session_state.score)
 
-# Draw the board
+# Draw the game board
 snake = st.session_state.snake
 food = st.session_state.food
-
 cells = []
 
 for y in range(SIZE):
@@ -121,27 +158,54 @@ for y in range(SIZE):
             symbol = ""
 
         cells.append(
-            f'<div style="background:{color};aspect-ratio:1;'
-            f'display:flex;align-items:center;justify-content:center;'
-            f'font-size:clamp(9px,2.5vw,18px);border-radius:3px;">'
-            f'{symbol}</div>'
+            f'<div class="cell" style="background-color:{color};'
+            f'font-size:clamp(8px,2vw,15px);">{symbol}</div>'
         )
 
-board = (
-    '<div style="display:grid;'
-    'grid-template-columns:repeat(15,minmax(0,1fr));'
-    'gap:2px;width:100%;max-width:450px;margin:12px auto;">'
+board_html = (
+    '<div class="board">'
     + "".join(cells)
-    + "</div>"
+    + '</div>'
 )
 
-st.markdown(board, unsafe_allow_html=True)
+st.markdown(board_html, unsafe_allow_html=True)
 
+# Show game-over message or controls
 if st.session_state.over:
-    st.error("Game Over! Final score: " + str(st.session_state.score))
+    st.error(f"Game Over! Final score: {st.session_state.score}")
 
     if st.button("🔄 Play Again", use_container_width=True):
         new_game()
         st.rerun()
 
-st.caption("Tip: Use the buttons above the board to steer your snake.")
+else:
+    st.markdown(
+        "<h3>Controls</h3>",
+        unsafe_allow_html=True
+    )
+
+    # Up button
+    _, middle, _ = st.columns(3, gap="small")
+
+    with middle:
+        if st.button("⬆️", key="up", use_container_width=True):
+            turn((0, -1))
+
+    # Left, down, and right buttons
+    left, middle, right = st.columns(3, gap="small")
+
+    with left:
+        if st.button("⬅️", key="left", use_container_width=True):
+            turn((-1, 0))
+
+    with middle:
+        if st.button("⬇️", key="down", use_container_width=True):
+            turn((0, 1))
+
+    with right:
+        if st.button("➡️", key="right", use_container_width=True):
+            turn((1, 0))
+
+    if st.button("🔄 Restart", use_container_width=True):
+        new_game()
+        st.rerun()
